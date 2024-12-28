@@ -1,124 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import AddPlayer from '../components/AddPlayer';
-import Leaderboard from '../components/Leaderboard';
-import MatchHistory from '../components/MatchHistory';
+import { auth, provider, signInWithPopup, signOut, db } from '../firebase';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 
 export default function Home() {
-  const [players, setPlayers] = useState([]);
+  const [user, setUser] = useState(null);
   const [matches, setMatches] = useState([]);
-  const [player1, setPlayer1] = useState('');
-  const [player2, setPlayer2] = useState('');
-  const [score1, setScore1] = useState('');
-  const [score2, setScore2] = useState('');
 
-  // Add a match and update player stats
-  const recordMatch = () => {
-    if (player1 && player2 && player1 !== player2 && score1 && score2) {
-      const match = {
-        id: Date.now(),
-        player1,
-        player2,
-        score1: parseInt(score1),
-        score2: parseInt(score2),
-        date: new Date().toISOString(),
-        winner: score1 > score2 ? player1 : player2,
-      };
-
-      setMatches([match, ...matches]);
-
-      setPlayers(players.map(player => {
-        if (player.name === player1) {
-          const wins = score1 > score2 ? player.wins + 1 : player.wins;
-          const losses = score1 < score2 ? player.losses + 1 : player.losses;
-          return {
-            ...player,
-            wins,
-            losses,
-            winRate: ((wins / (wins + losses)) * 100).toFixed(1),
-            pointsScored: player.pointsScored + parseInt(score1),
-            pointsConceded: player.pointsConceded + parseInt(score2),
-          };
-        }
-        if (player.name === player2) {
-          const wins = score2 > score1 ? player.wins + 1 : player.wins;
-          const losses = score2 < score1 ? player.losses + 1 : player.losses;
-          return {
-            ...player,
-            wins,
-            losses,
-            winRate: ((wins / (wins + losses)) * 100).toFixed(1),
-            pointsScored: player.pointsScored + parseInt(score2),
-            pointsConceded: player.pointsConceded + parseInt(score1),
-          };
-        }
-        return player;
-      }));
-
-      // Reset fields
-      setPlayer1('');
-      setPlayer2('');
-      setScore1('');
-      setScore2('');
+  // Sign in with Google
+  const handleSignIn = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      setUser({
+        name: result.user.displayName,
+        email: result.user.email,
+      });
+    } catch (error) {
+      console.error("Error signing in:", error);
     }
   };
 
+  // Sign out
+  const handleSignOut = () => {
+    signOut(auth);
+    setUser(null);
+  };
+
+  // Record a new match
+  const recordMatch = async (player2, score1, score2) => {
+    if (!user) return alert("Please sign in first!");
+
+    const match = {
+      player1: user.name,
+      player2,
+      score1: parseInt(score1, 10),
+      score2: parseInt(score2, 10),
+      date: new Date().toISOString(),
+      winner: score1 > score2 ? user.name : player2,
+    };
+
+    try {
+      await addDoc(collection(db, 'matches'), match);
+    } catch (error) {
+      console.error("Error recording match:", error);
+    }
+  };
+
+  // Fetch matches in real-time
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'matches'), (snapshot) => {
+      const fetchedMatches = snapshot.docs.map(doc => doc.data());
+      setMatches(fetchedMatches);
+    });
+
+    return unsubscribe;
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 text-gray-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="text-center mb-16 pt-8">
-          <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600 mb-3">
-            Ping Pong Tracker
-          </h1>
-          <h2 className="text-3xl font-semibold text-purple-300">Record Matches and Track Scores</h2>
-        </div>
-        <AddPlayer players={players} setPlayers={setPlayers} />
-        <div className="bg-black/40 rounded-2xl p-8">
-          <h2 className="text-2xl font-bold mb-6 text-purple-400">Record Match</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <select
-              value={player1}
-              onChange={e => setPlayer1(e.target.value)}
-              className="p-3 rounded bg-gray-800"
-            >
-              <option value="">Select Player 1</option>
-              {players.map(player => (
-                <option key={player.name} value={player.name}>{player.name}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={score1}
-              onChange={e => setScore1(e.target.value)}
-              placeholder="Score 1"
-              className="p-3 rounded bg-gray-800"
-            />
-            <select
-              value={player2}
-              onChange={e => setPlayer2(e.target.value)}
-              className="p-3 rounded bg-gray-800"
-            >
-              <option value="">Select Player 2</option>
-              {players.map(player => (
-                <option key={player.name} value={player.name}>{player.name}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={score2}
-              onChange={e => setScore2(e.target.value)}
-              placeholder="Score 2"
-              className="p-3 rounded bg-gray-800"
-            />
-          </div>
+      <div className="max-w-4xl mx-auto text-center space-y-6">
+        {!user ? (
           <button
-            onClick={recordMatch}
-            className="mt-4 p-3 bg-purple-600 rounded text-white"
+            onClick={handleSignIn}
+            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
           >
-            Record Match
+            Sign in with Google
           </button>
-        </div>
-        <Leaderboard players={players} />
-        <MatchHistory matches={matches} />
+        ) : (
+          <div>
+            <p className="text-lg">Welcome, {user.name}</p>
+            <button
+              onClick={handleSignOut}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
+
+        {user && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold">Record a Match</h2>
+            <input
+              type="text"
+              placeholder="Opponent's Name"
+              id="player2"
+              className="p-3 rounded bg-gray-800"
+            />
+            <input
+              type="number"
+              placeholder="Your Score"
+              id="score1"
+              className="p-3 rounded bg-gray-800"
+            />
+            <input
+              type="number"
+              placeholder="Opponent's Score"
+              id="score2"
+              className="p-3 rounded bg-gray-800"
+            />
+            <button
+              onClick={() =>
+                recordMatch(
+                  document.getElementById('player2').value,
+                  document.getElementById('score1').value,
+                  document.getElementById('score2').value
+                )
+              }
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              Record Match
+            </button>
+          </div>
+        )}
+
+        <h2 className="text-2xl font-bold mt-6">Match History</h2>
+        <ul>
+          {matches.map((match, index) => (
+            <li key={index} className="p-2 bg-gray-800 rounded mb-2">
+              {match.date} - {match.player1} ({match.score1}) vs {match.player2} ({match.score2}) - Winner: {match.winner}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
