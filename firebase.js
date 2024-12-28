@@ -1,9 +1,7 @@
-// firebase.js
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAb783mno-4OPqpyaehP4iSdsSxSap_Q-M",
   authDomain: "ping-pong-tracker-2f77f.firebaseapp.com",
@@ -14,10 +12,9 @@ const firebaseConfig = {
   measurementId: "G-4DVT7FXN0J"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 const db = getFirestore(app);
 
-export { auth, provider, signInWithPopup, signOut, db };
+export { auth, provider, db };
